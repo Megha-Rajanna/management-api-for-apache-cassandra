@@ -1,6 +1,6 @@
 FROM management-api-for-apache-cassandra-builder as builder
 
-FROM datastax/cassandra:4.0
+FROM docker.io/cassandra:4.0
 
 COPY --from=builder /build/management-api-common/target/datastax-mgmtapi-common-0.1.0-SNAPSHOT.jar /etc/cassandra/
 COPY --from=builder /build/management-api-agent/target/datastax-mgmtapi-agent-0.1.0-SNAPSHOT.jar /etc/cassandra/
@@ -9,7 +9,7 @@ COPY --from=builder /build/management-api-shim-3.x/target/datastax-mgmtapi-shim-
 COPY --from=builder /build/management-api-shim-4.x/target/datastax-mgmtapi-shim-4.x-0.1.0-SNAPSHOT.jar /opt/mgmtapi/
 
 ENV TINI_VERSION v0.18.0
-ADD https://github.com/krallin/tini/releases/download/${TINI_VERSION}/tini /tini
+ADD https://github.com/krallin/tini/releases/download/${TINI_VERSION}/tini-s390x /tini
 RUN chmod +x /tini
 
 RUN set -eux; \
@@ -22,12 +22,18 @@ ADD https://github.com/datastax/metric-collector-for-apache-cassandra/releases/d
 RUN mkdir /opt/mcac-agent && tar zxvf /opt/mcac-agent.tar.gz -C /opt/mcac-agent --strip-components 1 && rm /opt/mcac-agent.tar.gz
 
 # backwards compat with upstream ENTRYPOINT
-COPY scripts/docker-entrypoint.sh /usr/local/bin/
+#COPY scripts/docker-entrypoint.sh /usr/local/bin/
+COPY netty-transport-native-epoll-4.1.58.Final-linux-s390x_64.jar /opt/cassandra/lib/
+COPY libnetty_transport_native_epoll_s390_64.so /opt/cassandra/lib/sigar-bin/
+COPY --chown=1000:1000 scripts/docker-entrypoint.sh /usr/local/bin/
+COPY --chown=1000:1000 scripts/ready-probe.sh /usr/local/bin/
 RUN chmod +x /usr/local/bin/docker-entrypoint.sh && \
   ln -sf /usr/local/bin/docker-entrypoint.sh /docker-entrypoint.sh
 
 EXPOSE 9103
 EXPOSE 8080
 
-ENTRYPOINT ["/docker-entrypoint.sh"]
-CMD ["mgmtapi"]
+#ENTRYPOINT ["/docker-entrypoint.sh"]
+#CMD ["mgmtapi"]
+ENTRYPOINT ["/tini", "--", "/usr/local/bin/docker-entrypoint.sh"]
+CMD ["cassandra", "-f", "-R"]
